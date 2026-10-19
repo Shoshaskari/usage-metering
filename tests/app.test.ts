@@ -4,7 +4,13 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { app } from "../src/app.js";
 import { db, pool } from "../src/db/index.js";
-import { accounts, plans, users } from "../src/db/schema.js";
+import {
+  accounts,
+  plans,
+  users,
+  monthlyUsage,
+  consumptionRequests,
+} from "../src/db/schema.js";
 
 let testApiKey = "";
 let testAccountId = "";
@@ -127,6 +133,78 @@ describe("Usage Metering API", () => {
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe("INVALID_IDEMPOTENCY_KEY");
   });
+
+  it("accepts consumption and updates account and user usage", async () => {
+    const key = `accept-${randomUUID()}`;
+
+    const response = await request(app)
+      .post("/api/v1/consumption")
+      .set("X-API-Key", testApiKey)
+      .set("Idempotency-Key", key)
+      .send({ userId: testUserId, units: 2 });
+
+    expect(response.status).toBe(200);
+    expect(response.body.outcome).toBe("accepted");
+    expect(response.body.units).toBe(2);
+    expect(response.body.account.used).toBe(2);
+    expect(response.body.user.used).toBe(2);
+  });
+
+  it("replays the same idempotency key without double-counting", async () => {
+    const key = `replay-${randomUUID()}`;
+    const payload = { userId: testUserId, units: 3 };
+
+    const first = await request(app)
+      .post("/api/v1/consumption")
+      .set("X-API-Key", testApiKey)
+      .set("Idempotency-Key", key)
+      .send(payload);
+
+    const second = await request(app)
+      .post("/api/v1/consumption")
+      .set("X-API-Key", testApiKey)
+      .set("Idempotency-Key", key)
+      .send(payload);
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(first.body.outcome).toBe("accepted");
+    expect(second.body.replayed).toBe(true);
+    expect(second.body.user.used).toBe(first.body.user.used);
+    expect(second.body.account.used).toBe(first.body.account.used);
+  });
+
+  it("rejects reuse of an idempotency key with a different payload", async () => {
+    const key = `conflict-${randomUUID()}`;
+
+    const first = await request(app)
+      .post("/api/v1/consumption")
+      .set("X-API-Key", testApiKey)
+      .set("Idempotency-Key", key)
+      .send({ userId: testUserId, units: 1 });
+
+    const second = await request(app)
+      .post("/api/v1/consumption")
+      .set("X-API-Key", testApiKey)
+      .set("Idempotency-Key", key)
+      .send({ userId: testUserId, units: 2 });
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(409);
+    expect(second.body.error.code).toBe("IDEMPOTENCY_CONFLICT");
+  });
+
+  it("rejects a user who does not belong to the account", async () => {
+    const response = await request(app)
+      .post("/api/v1/consumption")
+      .set("X-API-Key", testApiKey)
+      .set("Idempotency-Key", `foreign-user-${randomUUID()}`)
+      .send({ userId: randomUUID(), units: 1 });
+
+    expect(response.status).toBe(404);
+    expect(response.body.error.code).toBe("USER_NOT_FOUND");
+  });
+
 });
 
 afterAll(async () => {
