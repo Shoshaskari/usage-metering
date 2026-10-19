@@ -71,6 +71,34 @@ describe("Usage Metering API", () => {
     });
   });
 
+  it("rejects account creation without an admin key", async () => {
+    const response = await request(app)
+      .post("/api/v1/accounts")
+      .send({ name: "Unauthorized Account" });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe("INVALID_ADMIN_KEY");
+  });
+
+  it("rejects account creation with an invalid admin key", async () => {
+    const response = await request(app)
+      .post("/api/v1/accounts")
+      .set("X-Admin-Key", "invalid-test-admin-key")
+      .send({ name: "Unauthorized Account" });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe("INVALID_ADMIN_KEY");
+  });
+
+  it("rejects user creation without an API key", async () => {
+    const response = await request(app)
+      .post("/api/v1/users")
+      .send({ name: "Unauthorized User" });
+
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe("API_KEY_REQUIRED");
+  });
+
   it("rejects consumption requests without an API key", async () => {
     const response = await request(app)
       .post("/api/v1/consumption")
