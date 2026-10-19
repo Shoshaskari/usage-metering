@@ -53,10 +53,12 @@ export const plans = pgTable(
       sql`${table.maxUnitsPerRequest} > 0`,
     ),
     index("plans_scope_idx").on(table.scope),
-    uniqueIndex("plans_name_scope_unique").on(
-      table.name,
-      table.scope,
-    ),
+    uniqueIndex("plans_default_name_scope_unique")
+      .on(table.name, table.scope)
+      .where(sql`${table.ownerAccountId} IS NULL`),
+    uniqueIndex("plans_owner_name_scope_unique")
+      .on(table.name, table.scope, table.ownerAccountId)
+      .where(sql`${table.ownerAccountId} IS NOT NULL`),
   ],
 );
 

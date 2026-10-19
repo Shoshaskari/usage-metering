@@ -1,3 +1,5 @@
+import path from "node:path";
+import { plansRouter } from "./routes/plans.js";
 import { apiRouter } from "./routes/api.js";
 import { consumptionRouter } from "./routes/consumption.js";
 import { usageRouter } from "./routes/usage.js";
@@ -9,6 +11,14 @@ import { db } from "./db/index.js";
 export const app = express();
 
 app.disable("x-powered-by");
+
+app.use(
+  "/demo",
+  express.static(path.resolve(process.cwd(), "example-client"), {
+    index: "index.html",
+    dotfiles: "deny",
+  }),
+);
 
 app.use(express.json({ limit: "100kb" }));
 app.use(
@@ -23,6 +33,7 @@ app.use(
   }),
 );
 app.use("/api/v1", apiRouter);
+app.use("/api/v1", plansRouter);
 app.use("/api/v1", usageRouter);
 app.use("/api/v1/consumption", consumptionRouter);
 

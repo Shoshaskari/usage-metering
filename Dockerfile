@@ -26,6 +26,7 @@ RUN npm ci --include=dev \
     && npm cache clean --force
 
 COPY --from=build /app/dist ./dist
+COPY example-client ./example-client
 COPY --from=build /app/drizzle ./drizzle
 COPY --from=build /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=build /app/src/db ./src/db

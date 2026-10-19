@@ -1,6 +1,6 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import { accounts, plans, users } from "../db/schema.js";
@@ -106,6 +106,7 @@ apiRouter.post("/accounts", async (req, res, next) => {
         and(
           eq(plans.name, parsed.data.plan),
           eq(plans.scope, "account"),
+          isNull(plans.ownerAccountId),
           eq(plans.isActive, true),
         ),
       )
@@ -169,6 +170,7 @@ apiRouter.post("/users", authenticateAccount, async (req, res, next) => {
         and(
           eq(plans.name, parsed.data.plan),
           eq(plans.scope, "user"),
+          isNull(plans.ownerAccountId),
           eq(plans.isActive, true),
         ),
       )

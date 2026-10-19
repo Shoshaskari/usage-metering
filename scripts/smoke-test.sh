@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL="${BASE_URL:-http://localhost:3000}"
+BASE_URL="${BASE_URL:-http://localhost:3001}"
 USER_ID="${DEMO_USER_ID:-cbfabb68-a366-407b-a9ee-93a1d1dc9328}"
 
 if [[ -z "${DEMO_API_KEY:-}" ]]; then

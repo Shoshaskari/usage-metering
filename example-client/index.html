@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Usage Metering — Demo</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f7fb;
+      --panel: #fff;
+      --ink: #172033;
+      --muted: #64748b;
+      --line: #dbe3ef;
+      --accent: #2459d3;
+      --accent-hover: #1947b2;
+      --danger: #b42318;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      line-height: 1.6;
+    }
+    header {
+      padding: 28px 20px;
+      background: #14213d;
+      color: white;
+    }
+    header > div, main { max-width: 1000px; margin: auto; }
+    h1 { margin: 0 0 5px; font-size: clamp(1.5rem, 4vw, 2rem); }
+    header p { margin: 0; color: #d5def0; }
+    main { padding: 22px 16px 48px; }
+    .notice {
+      padding: 12px 14px;
+      background: #e8efff;
+      border: 1px solid #c6d5ff;
+      border-radius: 12px;
+      margin-bottom: 18px;
+    }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .panel {
+      min-width: 0;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      box-shadow: 0 3px 12px rgb(20 33 61 / 4%);
+    }
+    .wide { grid-column: 1 / -1; }
+    h2 { margin: 0 0 14px; font-size: 1.12rem; }
+    label { display: block; margin: 12px 0 5px; font-weight: 650; }
+    input {
+      width: 100%;
+      min-width: 0;
+      padding: 10px 12px;
+      border: 1px solid #b9c5d8;
+      border-radius: 9px;
+      font: inherit;
+      background: white;
+      color: var(--ink);
+    }
+    input:focus { outline: 2px solid #9cb8ff; border-color: var(--accent); }
+    button {
+      border: 0;
+      border-radius: 9px;
+      padding: 10px 14px;
+      margin-top: 12px;
+      background: var(--accent);
+      color: white;
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:disabled { opacity: .55; cursor: wait; }
+    .secondary { background: #e8edf6; color: #1f2d45; }
+    .secondary:hover { background: #dbe4f2; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .row > button { flex: 0 0 auto; }
+    .muted { color: var(--muted); font-size: .92rem; }
+    #status { margin: 0 0 16px; padding: 10px 12px; border-radius: 9px; }
+    #status:empty { display: none; }
+    #status.ok { background: #e8f7ee; color: #17663a; }
+    #status.err { background: #fff0ef; color: var(--danger); }
+    pre {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      direction: ltr;
+      text-align: left;
+      background: #101828;
+      color: #e5edf9;
+      border-radius: 10px;
+      padding: 14px;
+      min-height: 70px;
+      max-height: 360px;
+      overflow: auto;
+      font-size: .85rem;
+    }
+    .field-note { margin-top: 5px; color: var(--muted); font-size: .84rem; }
+    @media (max-width: 680px) { .grid { grid-template-columns: 1fr; } .wide { grid-column: auto; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Usage Metering</h1>
+      <p>لوحة تجريبية لقراءة الاستخدام وإرسال طلبات الاستهلاك واستعراض السجل.</p>
+    </div>
+  </header>
+
+  <main>
+    <div class="notice">
+      <strong>تنبيه أمني:</strong>
+      استخدم مفتاحًا تجريبيًا فقط. المفتاح يبقى في حقول هذه الصفحة ولا يُحفظ في
+      localStorage، لكن لا تستخدم هذه الواجهة بمفتاح إنتاج أو على جهاز مشترك.
+    </div>
+
+    <div id="status" role="status" aria-live="polite"></div>
+
+    <div class="grid">
+      <section class="panel wide">
+        <h2>الاتصال</h2>
+        <label for="apiKey">API key</label>
+        <input id="apiKey" type="password" autocomplete="off" spellcheck="false"
+          placeholder="أدخل مفتاح API التجريبي">
+        <div class="field-note">لن يُحفظ المفتاح بعد إعادة تحميل الصفحة.</div>
+        <label for="userId">User ID (UUID)</label>
+        <input id="userId" autocomplete="off" spellcheck="false"
+          placeholder="أدخل معرّف المستخدم">
+        <div class="row">
+          <button id="usageBtn" type="button">عرض الاستخدام</button>
+          <button id="historyBtn" class="secondary" type="button">عرض السجل</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>إرسال استهلاك</h2>
+        <label for="units">عدد الوحدات</label>
+        <input id="units" type="number" min="1" max="50" step="1" value="1">
+        <div class="field-note">الحد الأقصى للطلب يعتمد على خطة المستخدم والحساب.</div>
+        <button id="consumeBtn" type="button">إرسال الطلب</button>
+      </section>
+
+      <section class="panel">
+        <h2>سجل الاستخدام</h2>
+        <label for="page">رقم الصفحة</label>
+        <input id="page" type="number" min="1" step="1" value="1">
+        <label for="limit">عدد النتائج</label>
+        <input id="limit" type="number" min="1" max="100" step="1" value="10">
+        <button id="historyPageBtn" type="button">تحميل الصفحة</button>
+      </section>
+
+      <section class="panel wide">
+        <div class="row">
+          <h2 style="margin:0">استجابة API</h2>
+          <button id="clearBtn" class="secondary" type="button">مسح النتيجة</button>
+        </div>
+        <pre id="output" aria-live="polite">النتائج ستظهر هنا.</pre>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const statusBox = $("status");
+    const output = $("output");
+    const apiKeyInput = $("apiKey");
+    const userIdInput = $("userId");
+
+    function showStatus(message, kind = "ok") {
+      statusBox.textContent = message;
+      statusBox.className = kind;
+    }
+
+    function showOutput(data) {
+      output.textContent = JSON.stringify(data, null, 2);
+    }
+
+    function credentials() {
+      const apiKey = apiKeyInput.value.trim();
+      const userId = userIdInput.value.trim();
+      if (!apiKey || !userId) {
+        throw new Error("أدخل API key وUser ID أولًا.");
+      }
+      return { apiKey, userId };
+    }
+
+    async function apiRequest(path, options = {}) {
+      const { apiKey } = credentials();
+      const response = await fetch(path, {
+        ...options,
+        headers: {
+          "X-API-Key": apiKey,
+          "Accept": "application/json",
+          ...(options.body ? { "Content-Type": "application/json" } : {}),
+          ...(options.headers || {})
+        }
+      });
+
+      const raw = await response.text();
+      let data;
+      try { data = raw ? JSON.parse(raw) : null; }
+      catch { data = { rawResponse: raw }; }
+
+      showOutput({ httpStatus: response.status, ok: response.ok, data });
+
+      if (!response.ok) {
+        const message = data?.error?.message || `فشل الطلب (HTTP ${response.status})`;
+        showStatus(message, "err");
+        return null;
+      }
+
+      showStatus("تم الطلب بنجاح.", "ok");
+      return data;
+    }
+
+    async function runAction(action) {
+      try {
+        await action();
+      } catch (error) {
+        showStatus(error instanceof Error ? error.message : "حدث خطأ غير متوقع.", "err");
+      }
+    }
+
+    async function loadUsage() {
+      const { userId } = credentials();
+      await apiRequest(`/api/v1/usage?userId=${encodeURIComponent(userId)}`);
+    }
+
+    async function loadHistory() {
+      const { userId } = credentials();
+      const page = Number($("page").value);
+      const limit = Number($("limit").value);
+      if (!Number.isInteger(page) || page < 1 ||
+          !Number.isInteger(limit) || limit < 1 || limit > 100) {
+        throw new Error("رقم الصفحة يجب أن يكون 1 أو أكثر، والنتائج بين 1 و100.");
+      }
+      const query = new URLSearchParams({
+        userId, page: String(page), limit: String(limit)
+      });
+      await apiRequest(`/api/v1/history?${query.toString()}`);
+    }
+
+    async function consume() {
+      const { userId } = credentials();
+      const units = Number($("units").value);
+      if (!Number.isInteger(units) || units < 1 || units > 50) {
+        throw new Error("أدخل عدد وحدات صحيحًا بين 1 و50.");
+      }
+
+      const idempotencyKey = crypto.randomUUID();
+      await apiRequest("/api/v1/consumption", {
+        method: "POST",
+        headers: { "Idempotency-Key": idempotencyKey },
+        body: JSON.stringify({ userId, units })
+      });
+    }
+
+    $("usageBtn").addEventListener("click", () => runAction(loadUsage));
+    $("historyBtn").addEventListener("click", () => runAction(loadHistory));
+    $("historyPageBtn").addEventListener("click", () => runAction(loadHistory));
+    $("consumeBtn").addEventListener("click", () => runAction(consume));
+    $("clearBtn").addEventListener("click", () => {
+      output.textContent = "النتائج ستظهر هنا.";
+      showStatus("");
+    });
+  </script>
+</body>
+</html>

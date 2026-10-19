@@ -1,6 +1,6 @@
-const baseUrl = "http://localhost:3000";
+const baseUrl = "http://localhost:3001";
 const apiKey = process.env.DEMO_API_KEY;
-const userId = "cbfabb68-a366-407b-a9ee-93a1d1dc9328";
+const userId = process.env.DEMO_USER_ID ?? "cbfabb68-a366-407b-a9ee-93a1d1dc9328";
 const requestCount = 20;
 
 if (!apiKey) {
