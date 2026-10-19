@@ -115,6 +115,28 @@ describe("Usage Metering API", () => {
     expect(response.body.error.code).toBe("API_KEY_REQUIRED");
   });
 
+  it("returns 400 for malformed JSON", async () => {
+    const response = await request(app)
+      .post("/api/v1/consumption")
+      .set("Content-Type", "application/json")
+      .send("{invalid}");
+
+    expect(response.status).toBe(400);
+  });
+
+  it("returns 413 for a request body larger than 100kb", async () => {
+    const largeBody = JSON.stringify({
+      data: "a".repeat(101 * 1024),
+    });
+
+    const response = await request(app)
+      .post("/api/v1/consumption")
+      .set("Content-Type", "application/json")
+      .send(largeBody);
+
+    expect(response.status).toBe(413);
+  });
+
   it("returns 404 for an unknown endpoint", async () => {
     const response = await request(app).get("/this-route-does-not-exist");
 
