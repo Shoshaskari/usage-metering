@@ -122,6 +122,7 @@ describe("Usage Metering API", () => {
       .send("{invalid}");
 
     expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe("INVALID_JSON");
   });
 
   it("returns 413 for a request body larger than 100kb", async () => {
@@ -135,6 +136,7 @@ describe("Usage Metering API", () => {
       .send(largeBody);
 
     expect(response.status).toBe(413);
+    expect(response.body.error.code).toBe("PAYLOAD_TOO_LARGE");
   });
 
   it("returns 404 for an unknown endpoint", async () => {

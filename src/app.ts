@@ -57,14 +57,31 @@ app.use((_req, res) => {
     },
   });
 });
-
 app.use(
   (
-    error: Error & { status?: number },
+    error: Error & { status?: number; type?: string },
     _req: express.Request,
     res: express.Response,
     _next: express.NextFunction,
   ) => {
+    if (error.type === "entity.parse.failed") {
+      return res.status(400).json({
+        error: {
+          code: "INVALID_JSON",
+          message: "The request body contains invalid JSON.",
+        },
+      });
+    }
+
+    if (error.type === "entity.too.large") {
+      return res.status(413).json({
+        error: {
+          code: "PAYLOAD_TOO_LARGE",
+          message: "The request body exceeds the allowed size.",
+        },
+      });
+    }
+
     console.error("Unhandled request error:", error.message);
 
     const status =
@@ -75,7 +92,7 @@ app.use(
         ? error.status
         : 500;
 
-    res.status(status).json({
+    return res.status(status).json({
       error: {
         code: "INTERNAL_SERVER_ERROR",
         message: "An unexpected error occurred.",
