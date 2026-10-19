@@ -18,7 +18,8 @@ function currentMonth(): string {
     return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-01`;
 }
 
-async function readUsage() {
+
+async function readUsage(targetUserId: string = userId) {
     const [accountRow] = await db
         .select({ consumedUnits: monthlyUsage.consumedUnits })
         .from(monthlyUsage)
@@ -37,7 +38,7 @@ async function readUsage() {
         .where(
             and(
                 eq(monthlyUsage.accountId, accountId),
-                eq(monthlyUsage.userId, userId),
+                eq(monthlyUsage.userId, targetUserId),
                 eq(monthlyUsage.usageMonth, currentMonth()),
             ),
         )
@@ -48,6 +49,7 @@ async function readUsage() {
         user: userRow?.consumedUnits ?? 0,
     };
 }
+
 
 beforeAll(async () => {
     const [accountPlan] = await db
@@ -169,7 +171,90 @@ describe("Quota limit enforcement", () => {
             account: 3,
             user: 3,
         });
+
     });
+
+    it("rejects a request above the user's per-request limit", async () => {
+        const [strictUserPlan] = await db
+            .insert(plans)
+            .values({
+                name: `Strict User ${randomUUID()}`,
+                scope: "user",
+                monthlyLimit: 10,
+                maxUnitsPerRequest: 1,
+            })
+            .returning({ id: plans.id });
+
+        let strictUserId = "";
+
+        try {
+            const [strictUser] = await db
+                .insert(users)
+                .values({
+                    accountId,
+                    name: "Strict Limit Test User",
+                    externalId: `strict-${randomUUID()}`,
+                    planId: strictUserPlan.id,
+                })
+                .returning({ id: users.id });
+
+            strictUserId = strictUser.id;
+
+            const before = await readUsage(strictUserId);
+
+            const response = await request(app)
+                .post("/api/v1/consumption")
+                .set("X-API-Key", apiKey)
+                .set("Idempotency-Key", `user-request-limit-${randomUUID()}`)
+                .send({ userId: strictUserId, units: 2 });
+
+            expect(response.status).toBe(200);
+            expect(response.body.outcome).toBe("rejected");
+            expect(response.body.rejectionReason).toBe(
+                "USER_REQUEST_LIMIT_EXCEEDED",
+            );
+
+            await expect(readUsage(strictUserId)).resolves.toEqual(before);
+        } finally {
+            if (strictUserId) {
+                await db.delete(users).where(eq(users.id, strictUserId));
+            }
+
+            await db.delete(plans).where(eq(plans.id, strictUserPlan.id));
+        }
+    });
+
+    it("replays a rejected request without changing usage", async () => {
+        const key = `rejected-replay-${randomUUID()}`;
+        const payload = { userId, units: 4 };
+        const before = await readUsage();
+
+        const first = await request(app)
+            .post("/api/v1/consumption")
+            .set("X-API-Key", apiKey)
+            .set("Idempotency-Key", key)
+            .send(payload);
+
+        const second = await request(app)
+            .post("/api/v1/consumption")
+            .set("X-API-Key", apiKey)
+            .set("Idempotency-Key", key)
+            .send(payload);
+
+        expect(first.status).toBe(200);
+        expect(first.body.outcome).toBe("rejected");
+        expect(second.status).toBe(200);
+        expect(second.body.outcome).toBe("rejected");
+        expect(second.body.replayed).toBe(true);
+        expect(second.body.rejectionReason).toBe(
+            first.body.rejectionReason,
+        );
+        expect(second.body.account.used).toBe(first.body.account.used);
+        expect(second.body.user.used).toBe(first.body.user.used);
+
+        await expect(readUsage()).resolves.toEqual(before);
+    });
+
 });
 
 afterAll(async () => {
