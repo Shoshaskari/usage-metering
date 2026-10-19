@@ -67,7 +67,15 @@ app.use(
   ) => {
     console.error("Unhandled request error:", error.message);
 
-    res.status(error.status ?? 500).json({
+    const status =
+      typeof error.status === "number" &&
+        Number.isInteger(error.status) &&
+        error.status >= 400 &&
+        error.status <= 599
+        ? error.status
+        : 500;
+
+    res.status(status).json({
       error: {
         code: "INTERNAL_SERVER_ERROR",
         message: "An unexpected error occurred.",
