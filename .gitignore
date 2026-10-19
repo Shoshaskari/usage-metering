@@ -3,3 +3,6 @@ dist/
 .env
 coverage/
 *.log
+
+# Generated benchmark reports
+load-tests/results/
