@@ -11,6 +11,7 @@ import {
   check,
   uniqueIndex,
   index,
+  foreignKey,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
@@ -102,6 +103,10 @@ export const users = pgTable(
       table.accountId,
       table.externalId,
     ),
+    uniqueIndex("users_account_id_id_unique").on(
+      table.accountId,
+      table.id,
+    ),
     index("users_account_id_idx").on(table.accountId),
     index("users_plan_id_idx").on(table.planId),
   ],
@@ -114,9 +119,7 @@ export const monthlyUsage = pgTable(
     accountId: uuid("account_id")
       .notNull()
       .references(() => accounts.id, { onDelete: "cascade" }),
-    userId: uuid("user_id").references(() => users.id, {
-      onDelete: "cascade",
-    }),
+    userId: uuid("user_id"),
     usageMonth: date("usage_month").notNull(),
     consumedUnits: integer("consumed_units").notNull().default(0),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -134,6 +137,11 @@ export const monthlyUsage = pgTable(
     uniqueIndex("monthly_usage_user_month_unique")
       .on(table.userId, table.usageMonth)
       .where(sql`${table.userId} IS NOT NULL`),
+    foreignKey({
+      columns: [table.accountId, table.userId],
+      foreignColumns: [users.accountId, users.id],
+      name: "monthly_usage_account_user_fk",
+    }).onDelete("cascade"),
     index("monthly_usage_account_idx").on(table.accountId),
     index("monthly_usage_user_idx").on(table.userId),
   ],
@@ -146,9 +154,7 @@ export const consumptionRequests = pgTable(
     accountId: uuid("account_id")
       .notNull()
       .references(() => accounts.id, { onDelete: "cascade" }),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull(),
     requestId: varchar("request_id", { length: 128 }).notNull(),
     units: integer("units").notNull(),
     outcome: consumptionOutcomeEnum("outcome").notNull(),
@@ -172,6 +178,11 @@ export const consumptionRequests = pgTable(
       table.accountId,
       table.createdAt,
     ),
+    foreignKey({
+      columns: [table.accountId, table.userId],
+      foreignColumns: [users.accountId, users.id],
+      name: "consumption_requests_account_user_fk",
+    }).onDelete("cascade"),
     index("consumption_requests_user_created_idx").on(
       table.userId,
       table.createdAt,
