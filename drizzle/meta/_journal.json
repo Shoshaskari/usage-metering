@@ -15,6 +15,13 @@
       "when": 1792423595606,
       "tag": "0001_clear_thunderbolt_ross",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792436643860,
+      "tag": "0002_bright_anita_blake",
+      "breakpoints": true
     }
   ]
 }

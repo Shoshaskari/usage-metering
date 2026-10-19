@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "plans_name_scope_unique" ON "plans" USING btree ("name","scope");

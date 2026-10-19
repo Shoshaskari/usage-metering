@@ -25,6 +25,7 @@ export const consumptionOutcomeEnum = pgEnum("consumption_outcome", [
   "rejected",
 ]);
 
+
 export const plans = pgTable(
   "plans",
   {
@@ -52,8 +53,13 @@ export const plans = pgTable(
       sql`${table.maxUnitsPerRequest} > 0`,
     ),
     index("plans_scope_idx").on(table.scope),
+    uniqueIndex("plans_name_scope_unique").on(
+      table.name,
+      table.scope,
+    ),
   ],
 );
+
 
 export const accounts = pgTable(
   "accounts",
