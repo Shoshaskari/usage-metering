@@ -261,3 +261,9 @@ Run these scripts against a development account only. Accepted concurrency-test 
 ## Project Scope
 
 This project is a single REST service backed by PostgreSQL. It does not require Redis, Kafka, MongoDB, Kubernetes, or separate microservices.
+
+## Documentation
+
+- [API Guide](docs/API-GUIDE.md)
+- [Technical Interview Guide](docs/INTERVIEW-GUIDE.md)
+- [Browser Demo](http://localhost:3001/demo/)

@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db, pool } from "./index.js";
 import { plans } from "./schema.js";
 
@@ -39,6 +39,7 @@ async function seed() {
         and(
           eq(plans.name, plan.name),
           eq(plans.scope, plan.scope),
+          isNull(plans.ownerAccountId),
         ),
       )
       .limit(1);
