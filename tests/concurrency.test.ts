@@ -96,11 +96,27 @@ describe("Concurrent quota enforcement", () => {
         expect(responses.every((response) => response.body.outcome === "accepted")).toBe(true);
         expect(responses.filter((response) => response.body.replayed !== true)).toHaveLength(1);
         expect(responses.filter((response) => response.body.replayed === true)).toHaveLength(7);
+        const normalize = (value: unknown): unknown => {
+            if (Array.isArray(value)) {
+                return value.map(normalize);
+            }
+
+            if (value !== null && typeof value === "object") {
+                return Object.fromEntries(
+                    Object.entries(value)
+                        .sort(([a], [b]) => a.localeCompare(b))
+                        .map(([key, item]) => [key, normalize(item)]),
+                );
+            }
+
+            return value;
+        };
 
         const snapshots = responses.map(({ body }) => {
             const { replayed: _replayed, ...snapshot } = body;
-            return JSON.stringify(snapshot);
+            return JSON.stringify(normalize(snapshot));
         });
+
         expect(new Set(snapshots).size).toBe(1);
 
         const [accountUsage] = await db
