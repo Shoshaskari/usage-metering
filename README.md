@@ -2,6 +2,24 @@
 
 A TypeScript REST API for managing account and user monthly usage quotas. The service records consumption attempts, enforces request and monthly limits, and supports idempotent retries using PostgreSQL transactions.
 
+## Engineering Highlights
+
+- **Tenant isolation:** API keys scope requests to their owning account.
+- **Idempotent consumption:** retries with the same key and payload return the stored result, while conflicting payloads are rejected.
+- **Concurrency safety:** database transactions and row-level locking protect quota updates from concurrent requests.
+- **Auditable failures:** rejected consumption attempts remain in history without consuming quota.
+- **Time-consistent quotas:** monthly usage is calculated using UTC calendar months.
+- **Input validation:** request payloads are validated, and common client errors return structured API responses.
+
+## Verification
+
+- Automated test suite: **30 tests passing** across 4 test files.
+- TypeScript type checking and production build pass.
+- GitHub Actions CI runs the checks against PostgreSQL.
+- Load-test baseline: approximately **587 requests/second** with 10 connections over 30 seconds, with zero reported errors or timeouts in that run.
+
+*Load-test results are a local baseline, not a production capacity guarantee.*
+
 ## Features
 
 - API-key authentication and account-level isolation.
