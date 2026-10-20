@@ -158,18 +158,39 @@ describe("Plan update and consumption concurrency", () => {
     );
   });
 });
-
 afterAll(async () => {
   try {
     if (accountId) {
-      await db.delete(accounts).where(eq(accounts.id, accountId));
+      const [defaultPlan] = await db
+        .select({ id: plans.id })
+        .from(plans)
+        .where(
+          and(
+            eq(plans.name, "Starter"),
+            eq(plans.scope, "account"),
+            isNull(plans.ownerAccountId),
+          ),
+        )
+        .limit(1);
+
+      if (!defaultPlan) {
+        throw new Error("Starter account plan not found during test cleanup.");
+      }
+
+      await db
+        .update(accounts)
+        .set({ planId: defaultPlan.id })
+        .where(eq(accounts.id, accountId));
     }
 
     if (planId) {
       await db.delete(plans).where(eq(plans.id, planId));
     }
+
+    if (accountId) {
+      await db.delete(accounts).where(eq(accounts.id, accountId));
+    }
   } finally {
     await pool.end();
   }
 });
-

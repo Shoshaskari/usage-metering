@@ -29,6 +29,13 @@
       "when": 1792447211497,
       "tag": "0003_whole_professor_monster",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1792464158000,
+      "tag": "0004_plan_scope_ownership",
+      "breakpoints": true
     }
   ]
 }
