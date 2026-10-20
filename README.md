@@ -13,7 +13,7 @@ A TypeScript REST API for managing account and user monthly usage quotas. The se
 
 ## Verification
 
-- Automated test suite: **30 tests passing** across 4 test files.
+- Automated test suite: **32 tests passing** across 5 test files.
 - TypeScript type checking and production build pass.
 - GitHub Actions CI runs the checks against PostgreSQL.
 - Load-test baseline: approximately **587 requests/second** with 10 connections over 30 seconds, with zero reported errors or timeouts in that run.
