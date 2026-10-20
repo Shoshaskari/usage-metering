@@ -70,6 +70,112 @@ beforeAll(async () => {
 });
 
 describe("Concurrent quota enforcement", () => {
+    it("replays concurrent requests with the same idempotency key exactly once", async () => {
+        const requestId = `same-key-${randomUUID()}`;
+        const units = 1;
+
+        const responses = await Promise.all(
+            Array.from({ length: 8 }, () =>
+                request(app)
+                    .post("/api/v1/consumption")
+                    .set("X-API-Key", apiKey)
+                    .set("Idempotency-Key", requestId)
+                    .send({ userId, units }),
+            ),
+        );
+
+        expect(responses.every((response) => response.status === 200)).toBe(true);
+        expect(responses.every((response) => response.body.outcome === "accepted")).toBe(true);
+        expect(responses.filter((response) => response.body.replayed !== true)).toHaveLength(1);
+        expect(responses.filter((response) => response.body.replayed === true)).toHaveLength(7);
+
+        const snapshots = responses.map(({ body }) => {
+            const { replayed: _replayed, ...snapshot } = body;
+            return JSON.stringify(snapshot);
+        });
+        expect(new Set(snapshots).size).toBe(1);
+
+        const [accountUsage] = await db
+            .select({ consumedUnits: monthlyUsage.consumedUnits })
+            .from(monthlyUsage)
+            .where(
+                and(
+                    eq(monthlyUsage.accountId, accountId),
+                    isNull(monthlyUsage.userId),
+                    eq(monthlyUsage.usageMonth, currentMonth()),
+                ),
+            )
+            .limit(1);
+
+        const [userUsage] = await db
+            .select({ consumedUnits: monthlyUsage.consumedUnits })
+            .from(monthlyUsage)
+            .where(
+                and(
+                    eq(monthlyUsage.accountId, accountId),
+                    eq(monthlyUsage.userId, userId),
+                    eq(monthlyUsage.usageMonth, currentMonth()),
+                ),
+            )
+            .limit(1);
+
+        expect(accountUsage?.consumedUnits ?? 0).toBe(units);
+        expect(userUsage?.consumedUnits ?? 0).toBe(units);
+    });
+
+    it("rejects concurrent reuse of one idempotency key with different payloads", async () => {
+        const requestId = `conflicting-key-${randomUUID()}`;
+        const responses = await Promise.all([
+            request(app)
+                .post("/api/v1/consumption")
+                .set("X-API-Key", apiKey)
+                .set("Idempotency-Key", requestId)
+                .send({ userId, units: 1 }),
+            request(app)
+                .post("/api/v1/consumption")
+                .set("X-API-Key", apiKey)
+                .set("Idempotency-Key", requestId)
+                .send({ userId, units: 2 }),
+        ]);
+
+        expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+        expect(responses.filter((response) => response.status === 409)).toHaveLength(1);
+        expect(responses.find((response) => response.status === 409)?.body.error.code)
+            .toBe("IDEMPOTENCY_CONFLICT");
+
+        const [accountUsage] = await db
+            .select({ consumedUnits: monthlyUsage.consumedUnits })
+            .from(monthlyUsage)
+            .where(
+                and(
+                    eq(monthlyUsage.accountId, accountId),
+                    isNull(monthlyUsage.userId),
+                    eq(monthlyUsage.usageMonth, currentMonth()),
+                ),
+            )
+            .limit(1);
+
+        const [userUsage] = await db
+            .select({ consumedUnits: monthlyUsage.consumedUnits })
+            .from(monthlyUsage)
+            .where(
+                and(
+                    eq(monthlyUsage.accountId, accountId),
+                    eq(monthlyUsage.userId, userId),
+                    eq(monthlyUsage.usageMonth, currentMonth()),
+                ),
+            )
+            .limit(1);
+
+        const acceptedResponse = responses.find((response) => response.status === 200);
+        const expectedUnits = acceptedResponse?.body.units;
+
+        expect(expectedUnits).toBeGreaterThanOrEqual(1);
+        expect(expectedUnits).toBeLessThanOrEqual(2);
+        expect(accountUsage?.consumedUnits ?? 0).toBe(expectedUnits);
+        expect(userUsage?.consumedUnits ?? 0).toBe(expectedUnits);
+    });
+
     it("does not exceed the account monthly quota when requests arrive concurrently", async () => {
         const responses = await Promise.all(
             Array.from({ length: 5 }, () =>
