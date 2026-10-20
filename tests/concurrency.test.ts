@@ -1,10 +1,10 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 import { app } from "../src/app.js";
 import { db, pool } from "../src/db/index.js";
-import { accounts, plans, users, monthlyUsage } from "../src/db/schema.js";
+import { accounts, plans, users, monthlyUsage, consumptionRequests } from "../src/db/schema.js";
 
 let apiKey = "";
 let accountId = "";
@@ -67,6 +67,14 @@ beforeAll(async () => {
         .returning({ id: users.id });
 
     userId = user.id;
+});
+
+
+beforeEach(async () => {
+    // Keep each concurrency scenario independent: prior tests must not consume
+    // quota or leave idempotency records for later scenarios.
+    await db.delete(consumptionRequests).where(eq(consumptionRequests.accountId, accountId));
+    await db.delete(monthlyUsage).where(eq(monthlyUsage.accountId, accountId));
 });
 
 describe("Concurrent quota enforcement", () => {
