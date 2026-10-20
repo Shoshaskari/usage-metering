@@ -213,20 +213,24 @@ consumptionRouter.post(
             plan: accountPlan.planName,
             used: accountConsumed + (accepted ? units : 0),
             limit: accountPlan.monthlyLimit,
-            remaining:
+            remaining: Math.max(
+              0,
               accountPlan.monthlyLimit -
-              accountConsumed -
-              (accepted ? units : 0),
+                accountConsumed -
+                (accepted ? units : 0),
+            ),
           },
           user: {
             id: userPlan.id,
             plan: userPlan.planName,
             used: userConsumed + (accepted ? units : 0),
             limit: userPlan.monthlyLimit,
-            remaining:
+            remaining: Math.max(
+              0,
               userPlan.monthlyLimit -
-              userConsumed -
-              (accepted ? units : 0),
+                userConsumed -
+                (accepted ? units : 0),
+            ),
           },
         };
 

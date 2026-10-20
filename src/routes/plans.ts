@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../db/index.js";
 import { accounts, plans, users } from "../db/schema.js";
@@ -136,19 +136,27 @@ plansRouter.patch("/plans/:planId", authenticateAccount, async (req, res, next) 
 
     const account = res.locals.account as { id: string; name: string };
 
-    const [plan] = await db
-      .update(plans)
-      .set({
-        ...parsed.data,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(plans.id, idParsed.data),
-          eq(plans.ownerAccountId, account.id),
-        ),
-      )
-      .returning();
+    const plan = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT id FROM accounts WHERE id = ${account.id} FOR UPDATE`,
+      );
+
+      const [updatedPlan] = await tx
+        .update(plans)
+        .set({
+          ...parsed.data,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(plans.id, idParsed.data),
+            eq(plans.ownerAccountId, account.id),
+          ),
+        )
+        .returning();
+
+      return updatedPlan;
+    });
 
     if (!plan) {
       res.status(404).json({
@@ -182,21 +190,46 @@ plansRouter.patch("/accounts/plan", authenticateAccount, async (req, res, next) 
 
     const account = res.locals.account as { id: string; name: string };
 
-    const [plan] = await db
-      .select({ id: plans.id })
-      .from(plans)
-      .where(
-        and(
-          eq(plans.id, parsed.data.planId),
-          eq(plans.scope, "account"),
-          eq(plans.isActive, true),
-          or(
-            isNull(plans.ownerAccountId),
-            eq(plans.ownerAccountId, account.id),
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT id FROM accounts WHERE id = ${account.id} FOR UPDATE`,
+      );
+
+      const [plan] = await tx
+        .select({ id: plans.id })
+        .from(plans)
+        .where(
+          and(
+            eq(plans.id, parsed.data.planId),
+            eq(plans.scope, "account"),
+            eq(plans.isActive, true),
+            or(
+              isNull(plans.ownerAccountId),
+              eq(plans.ownerAccountId, account.id),
+            ),
           ),
-        ),
-      )
-      .limit(1);
+        )
+        .limit(1);
+
+      if (!plan) {
+        return { plan: null, updated: null };
+      }
+
+      const [updated] = await tx
+        .update(accounts)
+        .set({ planId: plan.id, updatedAt: new Date() })
+        .where(eq(accounts.id, account.id))
+        .returning({
+          id: accounts.id,
+          name: accounts.name,
+          planId: accounts.planId,
+          updatedAt: accounts.updatedAt,
+        });
+
+      return { plan, updated };
+    });
+
+    const { plan, updated } = result;
 
     if (!plan) {
       res.status(404).json({
@@ -207,17 +240,6 @@ plansRouter.patch("/accounts/plan", authenticateAccount, async (req, res, next) 
       });
       return;
     }
-
-    const [updated] = await db
-      .update(accounts)
-      .set({ planId: plan.id, updatedAt: new Date() })
-      .where(eq(accounts.id, account.id))
-      .returning({
-        id: accounts.id,
-        name: accounts.name,
-        planId: accounts.planId,
-        updatedAt: accounts.updatedAt,
-      });
 
     res.status(200).json({ account: updated });
   } catch (error) {
@@ -242,21 +264,52 @@ plansRouter.patch("/users/:userId/plan", authenticateAccount, async (req, res, n
 
     const account = res.locals.account as { id: string; name: string };
 
-    const [plan] = await db
-      .select({ id: plans.id })
-      .from(plans)
-      .where(
-        and(
-          eq(plans.id, parsed.data.planId),
-          eq(plans.scope, "user"),
-          eq(plans.isActive, true),
-          or(
-            isNull(plans.ownerAccountId),
-            eq(plans.ownerAccountId, account.id),
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT id FROM accounts WHERE id = ${account.id} FOR UPDATE`,
+      );
+
+      const [plan] = await tx
+        .select({ id: plans.id })
+        .from(plans)
+        .where(
+          and(
+            eq(plans.id, parsed.data.planId),
+            eq(plans.scope, "user"),
+            eq(plans.isActive, true),
+            or(
+              isNull(plans.ownerAccountId),
+              eq(plans.ownerAccountId, account.id),
+            ),
           ),
-        ),
-      )
-      .limit(1);
+        )
+        .limit(1);
+
+      if (!plan) {
+        return { plan: null, updated: null };
+      }
+
+      const [updated] = await tx
+        .update(users)
+        .set({ planId: plan.id, updatedAt: new Date() })
+        .where(
+          and(
+            eq(users.id, userIdParsed.data),
+            eq(users.accountId, account.id),
+          ),
+        )
+        .returning({
+          id: users.id,
+          accountId: users.accountId,
+          name: users.name,
+          planId: users.planId,
+          updatedAt: users.updatedAt,
+        });
+
+      return { plan, updated };
+    });
+
+    const { plan, updated } = result;
 
     if (!plan) {
       res.status(404).json({
@@ -267,23 +320,6 @@ plansRouter.patch("/users/:userId/plan", authenticateAccount, async (req, res, n
       });
       return;
     }
-
-    const [updated] = await db
-      .update(users)
-      .set({ planId: plan.id, updatedAt: new Date() })
-      .where(
-        and(
-          eq(users.id, userIdParsed.data),
-          eq(users.accountId, account.id),
-        ),
-      )
-      .returning({
-        id: users.id,
-        accountId: users.accountId,
-        name: users.name,
-        planId: users.planId,
-        updatedAt: users.updatedAt,
-      });
 
     if (!updated) {
       res.status(404).json({
