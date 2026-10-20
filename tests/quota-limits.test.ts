@@ -224,6 +224,96 @@ describe("Quota limit enforcement", () => {
         }
     });
 
+    it("never reports negative remaining quota after plan limits are lowered", async () => {
+        const testApiKey = `um_test_${randomBytes(32).toString("hex")}`;
+        const testAccountPlanName = `Lowered Account ${randomUUID()}`;
+        const testUserPlanName = `Lowered User ${randomUUID()}`;
+
+        const [testAccountPlan] = await db
+            .insert(plans)
+            .values({
+                name: testAccountPlanName,
+                scope: "account",
+                monthlyLimit: 10,
+                maxUnitsPerRequest: 10,
+            })
+            .returning({ id: plans.id });
+
+        const [testUserPlan] = await db
+            .insert(plans)
+            .values({
+                name: testUserPlanName,
+                scope: "user",
+                monthlyLimit: 10,
+                maxUnitsPerRequest: 10,
+            })
+            .returning({ id: plans.id });
+
+        let testAccountId = "";
+        let testUserId = "";
+
+        try {
+            const [testAccount] = await db
+                .insert(accounts)
+                .values({
+                    name: "Lowered Quota Test Account",
+                    apiKeyHash: createHash("sha256").update(testApiKey).digest("hex"),
+                    apiKeyPrefix: testApiKey.slice(0, 11),
+                    planId: testAccountPlan.id,
+                })
+                .returning({ id: accounts.id });
+
+            testAccountId = testAccount.id;
+
+            const [testUser] = await db
+                .insert(users)
+                .values({
+                    accountId: testAccountId,
+                    name: "Lowered Quota Test User",
+                    externalId: `lowered-${randomUUID()}`,
+                    planId: testUserPlan.id,
+                })
+                .returning({ id: users.id });
+
+            testUserId = testUser.id;
+
+            const accepted = await request(app)
+                .post("/api/v1/consumption")
+                .set("X-API-Key", testApiKey)
+                .set("Idempotency-Key", `lowered-before-${randomUUID()}`)
+                .send({ userId: testUserId, units: 5 });
+
+            expect(accepted.status).toBe(200);
+            expect(accepted.body.outcome).toBe("accepted");
+
+            await db
+                .update(plans)
+                .set({ monthlyLimit: 3 })
+                .where(inArray(plans.id, [testAccountPlan.id, testUserPlan.id]));
+
+            const rejected = await request(app)
+                .post("/api/v1/consumption")
+                .set("X-API-Key", testApiKey)
+                .set("Idempotency-Key", `lowered-after-${randomUUID()}`)
+                .send({ userId: testUserId, units: 1 });
+
+            expect(rejected.status).toBe(200);
+            expect(rejected.body.outcome).toBe("rejected");
+            expect(rejected.body.account.used).toBe(5);
+            expect(rejected.body.account.remaining).toBe(0);
+            expect(rejected.body.user.used).toBe(5);
+            expect(rejected.body.user.remaining).toBe(0);
+        } finally {
+            if (testAccountId) {
+                await db.delete(accounts).where(eq(accounts.id, testAccountId));
+            }
+
+            await db.delete(plans).where(
+                inArray(plans.id, [testAccountPlan.id, testUserPlan.id]),
+            );
+        }
+    });
+
     it("replays a rejected request without changing usage", async () => {
         const key = `rejected-replay-${randomUUID()}`;
         const payload = { userId, units: 4 };

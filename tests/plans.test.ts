@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { app } from "../src/app.js";
 import { db, pool } from "../src/db/index.js";
 import { accounts, plans, users } from "../src/db/schema.js";
@@ -261,11 +261,54 @@ describe("Custom plans API", () => {
 
 afterAll(async () => {
   try {
-    if (accountA) {
-      await db.delete(accounts).where(eq(accounts.id, accountA));
-    }
-    if (accountB) {
-      await db.delete(accounts).where(eq(accounts.id, accountB));
+    const ownerIds = [accountA, accountB].filter(Boolean);
+
+    if (ownerIds.length > 0) {
+      const [defaultAccountPlan] = await db
+        .select({ id: plans.id })
+        .from(plans)
+        .where(
+          and(
+            eq(plans.name, "Starter"),
+            eq(plans.scope, "account"),
+            isNull(plans.ownerAccountId),
+          ),
+        )
+        .limit(1);
+
+      const [defaultUserPlan] = await db
+        .select({ id: plans.id })
+        .from(plans)
+        .where(
+          and(
+            eq(plans.name, "Basic"),
+            eq(plans.scope, "user"),
+            isNull(plans.ownerAccountId),
+          ),
+        )
+        .limit(1);
+
+      if (!defaultAccountPlan || !defaultUserPlan) {
+        throw new Error("Default plans not found during test cleanup.");
+      }
+
+      await db
+        .update(accounts)
+        .set({ planId: defaultAccountPlan.id })
+        .where(inArray(accounts.id, ownerIds));
+
+      await db
+        .update(users)
+        .set({ planId: defaultUserPlan.id })
+        .where(inArray(users.accountId, ownerIds));
+
+      await db
+        .delete(plans)
+        .where(inArray(plans.ownerAccountId, ownerIds));
+
+      await db
+        .delete(accounts)
+        .where(inArray(accounts.id, ownerIds));
     }
   } finally {
     await pool.end();

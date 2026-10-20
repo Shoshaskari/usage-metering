@@ -6,3 +6,9 @@ coverage/
 
 # Generated benchmark reports
 load-tests/results/
+
+# Local secrets and backups (never commit)
+.dashboard-api-key
+backup_before_*.sql
+example-client/index.before-*.html
+usage-metering.code-workspace

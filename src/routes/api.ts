@@ -147,6 +147,27 @@ apiRouter.post("/accounts", async (req, res, next) => {
 });
 
 // All user operations are scoped to the authenticated account.
+apiRouter.get("/users", authenticateAccount, async (_req, res, next) => {
+  try {
+    const account = res.locals.account as { id: string; name: string };
+
+    const accountUsers = await db
+      .select({
+        id: users.id,
+        name: users.name,
+        externalId: users.externalId,
+        planId: users.planId,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(eq(users.accountId, account.id))
+      .orderBy(users.name);
+
+    res.json({ users: accountUsers });
+  } catch (error) {
+    next(error);
+  }
+});
 apiRouter.post("/users", authenticateAccount, async (req, res, next) => {
   try {
     const parsed = createUserSchema.safeParse(req.body);
